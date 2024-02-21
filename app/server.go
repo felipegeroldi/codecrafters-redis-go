@@ -6,6 +6,8 @@ import (
 	"io"
 	"net"
 	"os"
+	"strconv"
+	"strings"
 )
 
 func main() {
@@ -39,6 +41,42 @@ func handleConnection(conn net.Conn) {
 			return
 		}
 
-		conn.Write([]byte("+PONG\r\n"))
+		conn.Write([]byte(parseCommand(buf)))
 	}
+}
+
+func parseCommand(cmd []byte) string {
+	var len int
+	var returnVal string
+	if cmd[0] == REDIS_ARR {
+		len, _ = strconv.Atoi(string(cmd[1]))
+		cmd = cmd[4:]
+	}
+
+	switch cmd[0] {
+	case REDIS_BULK_STR:
+		args := parseBulkStr(cmd, len)
+		if strings.ToLower(args[0]) == "ping" {
+			returnVal = "+PONG\r\n"
+		} else if strings.ToLower(args[0]) == "echo" {
+			returnVal = fmt.Sprintf("+%s\r\n", args[1])
+		}
+	default:
+		returnVal = "-not supported data type\r\n"
+	}
+
+	return returnVal
+}
+
+func parseBulkStr(cmd []byte, len int) []string {
+	var args []string
+
+	for i := len; i > 0; i-- {
+		argLen, _ := strconv.Atoi(string(cmd[1]))
+		arg := string(cmd[4 : argLen+4])
+		args = append(args, arg)
+
+		cmd = cmd[argLen+4+2:]
+	}
+	return args
 }
