@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -17,7 +18,11 @@ var expire = make(map[string]time.Time)
 func main() {
 	fmt.Println("Logs from your program will appear here!")
 
-	l, err := net.Listen("tcp", "0.0.0.0:6379")
+	var portNumber uint
+	flag.UintVar(&portNumber, "port", 6379, "The port number of application")
+	flag.Parse()
+
+	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", portNumber))
 	if err != nil {
 		fmt.Println("Failed to bind to port 6379")
 		os.Exit(1)
@@ -49,6 +54,37 @@ func handleConnection(conn net.Conn) {
 	}
 }
 
+func echo(msg string) string {
+	return fmt.Sprintf("+%s\r\n", msg)
+}
+
+func ping() string {
+	return "+PONG\r\n"
+}
+
+func set(args []string) string {
+	base[args[0]] = args[1]
+
+	if len(args) > 3 {
+		if strings.ToLower(args[2]) == "px" {
+			ms, _ := strconv.Atoi(args[3])
+			expire[args[0]] = time.Now().Add(time.Millisecond * time.Duration(ms))
+		}
+	}
+
+	return "+OK\r\n"
+}
+
+func get(args []string) string {
+	expireTime := expire[args[0]]
+	val := base[args[0]]
+	if expireTime.IsZero() && val != "" || !expireTime.IsZero() && expireTime.After(time.Now()) {
+		return fmt.Sprintf("+%s\r\n", base[args[0]])
+	} else {
+		return "$-1\r\n"
+	}
+}
+
 func parseCommand(cmd []byte) string {
 	var cmdLen int
 	var returnVal string
@@ -60,29 +96,18 @@ func parseCommand(cmd []byte) string {
 	switch cmd[0] {
 	case REDIS_BULK_STR:
 		args := parseBulkStr(cmd, cmdLen)
-		if strings.ToLower(args[0]) == "ping" {
-			returnVal = "+PONG\r\n"
-		} else if strings.ToLower(args[0]) == "echo" {
-			returnVal = fmt.Sprintf("+%s\r\n", args[1])
-		} else if strings.ToLower(args[0]) == "set" {
-			base[args[1]] = args[2]
 
-			if len(args) > 3 {
-				if strings.ToLower(args[3]) == "px" {
-					ms, _ := strconv.Atoi(args[4])
-					expire[args[1]] = time.Now().Add(time.Millisecond * time.Duration(ms))
-				}
-			}
-
-			returnVal = "+OK\r\n"
-		} else if strings.ToLower(args[0]) == "get" {
-			expireTime := expire[args[1]]
-			val := base[args[1]]
-			if expireTime.IsZero() && val != "" || !expireTime.IsZero() && expireTime.After(time.Now()) {
-				returnVal = fmt.Sprintf("+%s\r\n", base[args[1]])
-			} else {
-				returnVal = "$-1\r\n"
-			}
+		switch strings.ToLower(args[0]) {
+		case REDIS_CMD_PING:
+			returnVal = ping()
+		case REDIS_CMD_ECHO:
+			returnVal = echo(args[1])
+		case REDIS_CMD_SET:
+			returnVal = set(args[1:])
+		case REDIS_CMD_GET:
+			returnVal = get(args[1:])
+		default:
+			returnVal = "-not supported command\r\n"
 		}
 	default:
 		returnVal = "-not supported data type\r\n"
