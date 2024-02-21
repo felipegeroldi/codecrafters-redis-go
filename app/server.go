@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 )
@@ -25,17 +27,18 @@ func main() {
 
 		handleConnection(c)
 	}
-
 }
 
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 	buf := make([]byte, 1024)
 
-	_, err := conn.Read(buf)
-	if err != nil {
-		fmt.Println(err)
-	}
+	for {
+		_, err := conn.Read(buf)
+		if errors.Is(err, io.EOF) {
+			return
+		}
 
-	conn.Write([]byte("+PONG\r\n"))
+		conn.Write([]byte("+PONG\r\n"))
+	}
 }
