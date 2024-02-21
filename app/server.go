@@ -10,6 +10,8 @@ import (
 	"strings"
 )
 
+var base = make(map[string]string)
+
 func main() {
 	fmt.Println("Logs from your program will appear here!")
 
@@ -60,6 +62,11 @@ func parseCommand(cmd []byte) string {
 			returnVal = "+PONG\r\n"
 		} else if strings.ToLower(args[0]) == "echo" {
 			returnVal = fmt.Sprintf("+%s\r\n", args[1])
+		} else if strings.ToLower(args[0]) == "set" {
+			base[args[1]] = args[2]
+			returnVal = "+OK\r\n"
+		} else if strings.ToLower(args[0]) == "get" {
+			returnVal = fmt.Sprintf("+%s\r\n", base[args[1]])
 		}
 	default:
 		returnVal = "-not supported data type\r\n"
