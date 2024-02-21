@@ -8,9 +8,11 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var base = make(map[string]string)
+var expire = make(map[string]time.Time)
 
 func main() {
 	fmt.Println("Logs from your program will appear here!")
@@ -48,25 +50,39 @@ func handleConnection(conn net.Conn) {
 }
 
 func parseCommand(cmd []byte) string {
-	var len int
+	var cmdLen int
 	var returnVal string
 	if cmd[0] == REDIS_ARR {
-		len, _ = strconv.Atoi(string(cmd[1]))
+		cmdLen, _ = strconv.Atoi(string(cmd[1]))
 		cmd = cmd[4:]
 	}
 
 	switch cmd[0] {
 	case REDIS_BULK_STR:
-		args := parseBulkStr(cmd, len)
+		args := parseBulkStr(cmd, cmdLen)
 		if strings.ToLower(args[0]) == "ping" {
 			returnVal = "+PONG\r\n"
 		} else if strings.ToLower(args[0]) == "echo" {
 			returnVal = fmt.Sprintf("+%s\r\n", args[1])
 		} else if strings.ToLower(args[0]) == "set" {
 			base[args[1]] = args[2]
+
+			if len(args) > 3 {
+				if strings.ToLower(args[3]) == "px" {
+					ms, _ := strconv.Atoi(args[4])
+					expire[args[1]] = time.Now().Add(time.Millisecond * time.Duration(ms))
+				}
+			}
+
 			returnVal = "+OK\r\n"
 		} else if strings.ToLower(args[0]) == "get" {
-			returnVal = fmt.Sprintf("+%s\r\n", base[args[1]])
+			expireTime := expire[args[1]]
+			val := base[args[1]]
+			if expireTime.IsZero() && val != "" || !expireTime.IsZero() && expireTime.After(time.Now()) {
+				returnVal = fmt.Sprintf("+%s\r\n", base[args[1]])
+			} else {
+				returnVal = "$-1\r\n"
+			}
 		}
 	default:
 		returnVal = "-not supported data type\r\n"
