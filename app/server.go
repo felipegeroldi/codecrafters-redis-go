@@ -16,12 +16,26 @@ func main() {
 	}
 	defer l.Close()
 
-	c, err := l.Accept()
-	if err != nil {
-		fmt.Println("Error accepting connection: ", err.Error())
-		os.Exit(1)
-	}
-	defer c.Close()
+	for {
+		c, err := l.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+			os.Exit(1)
+		}
 
-	c.Write([]byte("+PONG\r\n"))
+		handleConnection(c)
+	}
+
+}
+
+func handleConnection(conn net.Conn) {
+	defer conn.Close()
+	buf := make([]byte, 1024)
+
+	_, err := conn.Read(buf)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	conn.Write([]byte("+PONG\r\n"))
 }
