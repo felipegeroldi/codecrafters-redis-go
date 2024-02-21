@@ -95,11 +95,13 @@ func parseBulkStr(cmd []byte, len int) []string {
 	var args []string
 
 	for i := len; i > 0; i-- {
-		argLen, _ := strconv.Atoi(string(cmd[1]))
-		arg := string(cmd[4 : argLen+4])
+		values := strings.Split(string(cmd), "\r\n")
+
+		argLen, _ := strconv.Atoi(values[0][1:])
+		arg := string(values[1][:argLen])
 		args = append(args, arg)
 
-		cmd = cmd[argLen+4+2:]
+		cmd = []byte(strings.Join(values[2:], "\r\n"))
 	}
 	return args
 }
